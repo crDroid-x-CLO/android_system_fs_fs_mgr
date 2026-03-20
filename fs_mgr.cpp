@@ -200,8 +200,11 @@ static bool umount_retry(const std::string& mount_point) {
 static const char* get_disable_linear_lookup_option(void) {
     std::string linear_lookup_support;
 
+    if (access(SYSFS_F2FS_LINEAR_LOOKUP, F_OK) != 0) {
+        return nullptr;
+    }
+
     if (!android::base::ReadFileToString(SYSFS_F2FS_LINEAR_LOOKUP, &linear_lookup_support)) {
-        PERROR << "Failed to open " << SYSFS_F2FS_LINEAR_LOOKUP;
         return nullptr;
     }
 
