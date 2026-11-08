@@ -90,6 +90,7 @@ struct FstabEntry {
         bool wrapped_key : 1;
         bool overlay_on : 1;
         bool overlay_off : 1;
+        bool wrapped_key : 1;
     } fs_mgr_flags = {};
 
     bool is_encryptable() const { return fs_mgr_flags.crypt; }

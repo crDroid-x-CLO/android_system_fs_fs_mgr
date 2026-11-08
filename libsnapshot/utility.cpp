@@ -242,7 +242,16 @@ bool GetLegacyCompressionEnabledProperty() {
     return fetcher->GetBoolProperty("ro.virtual_ab.compression.enabled", false);
 }
 
+bool GetUserspaceSnapshotsEnabledProperty() {
+    auto fetcher = IPropertyFetcher::GetInstance();
+    return fetcher->GetBoolProperty("ro.virtual_ab.userspace.snapshots.enabled", false);
+}
+
 bool CanUseUserspaceSnapshots() {
+    if (!GetUserspaceSnapshotsEnabledProperty()) {
+        LOG(INFO) << "Virtual A/B - Userspace snapshots disabled";
+        return false;
+    }
     return true;
 }
 

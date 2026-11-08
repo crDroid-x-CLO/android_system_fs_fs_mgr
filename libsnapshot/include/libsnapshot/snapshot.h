@@ -408,7 +408,7 @@ class SnapshotManager final : public ISnapshotManager {
     // Resume the snapshot merge.
     bool ResumeSnapshotMerge();
 
-    enum class SnapshotDriver { DM_USER, UBLK };
+    enum class SnapshotDriver { DM_SNAPSHOT, DM_USER, UBLK };
 
     bool UpdateUsesUblk();
     // Add new public entries above this line.
@@ -457,6 +457,7 @@ class SnapshotManager final : public ISnapshotManager {
     friend struct AutoDeleteSnapshot;
     friend struct PartitionCowCreator;
 
+    using DmTargetSnapshot = android::dm::DmTargetSnapshot;
     using IImageManager = android::fiemap::IImageManager;
     using TargetInfo = android::dm::DeviceMapper::TargetInfo;
 
@@ -517,6 +518,16 @@ class SnapshotManager final : public ISnapshotManager {
     // backing COW image using the size previously passed to CreateSnapshot().
     Return CreateCowImage(LockedFile* lock, const std::string& name);
 
+    // Map a snapshot device that was previously created with CreateSnapshot.
+    // If a merge was previously initiated, the device-mapper table will have a
+    // snapshot-merge target instead of a snapshot target. If the timeout
+    // parameter greater than zero, this function will wait the given amount
+    // of time for |dev_path| to become available, and fail otherwise. If
+    // timeout_ms is 0, then no wait will occur and |dev_path| may not yet
+    // exist on return.
+    bool MapSnapshot(LockedFile* lock, const std::string& name, const std::string& base_device,
+                     const std::string& cow_device, const std::chrono::milliseconds& timeout_ms,
+                     std::string* dev_path);
     bool MapUserspaceCowDmUser(const std::string& name, const std::string& misc_name,
                                const std::string& cow_file, const std::string& base_device,
                                const std::string& base_path_merge, uint64_t base_sectors,
@@ -662,12 +673,15 @@ class SnapshotManager final : public ISnapshotManager {
     // Note that these require the name of the device containing the snapshot,
     // which may be the "inner" device. Use GetsnapshotDeviecName().
 
+    bool QuerySnapshotStatus(const std::string& dm_name, std::string* target_type,
+                             DmTargetSnapshot::Status* status);
     bool IsSnapshotDevice(const std::string& dm_name, TargetInfo* target = nullptr);
 
     // Internal callback for when merging is complete.
     bool OnSnapshotMergeComplete(LockedFile* lock, const std::string& name,
                                  const SnapshotStatus& status);
-    bool CollapseSnapshotDevice(const std::string& name, const SnapshotStatus& status);
+    bool CollapseSnapshotDevice(LockedFile* lock, const std::string& name,
+                                const SnapshotStatus& status);
 
     struct [[nodiscard]] MergeResult {
         explicit MergeResult(UpdateState state,
@@ -730,6 +744,9 @@ class SnapshotManager final : public ISnapshotManager {
 
         // COW name (eg system_cow). Not present if no COW is needed.
         std::string cow_device_name;
+
+        // dm-snapshot instance. Not present in Update mode for VABC.
+        std::string snapshot_device;
     };
 
     // Helpers for OpenSnapshotWriter.
@@ -844,6 +861,9 @@ class SnapshotManager final : public ISnapshotManager {
     // Helper of UpdateUsesSnapuserd
     bool UpdateUsesSnapuserd(LockedFile* lock);
 
+    // Check if current update uses userspace snapshots
+    bool UpdateUsesUserSnapshots(LockedFile* lock);
+
     // Check if io_uring API's need to be used
     bool UpdateUsesIouring(LockedFile* lock);
 
@@ -886,6 +906,7 @@ class SnapshotManager final : public ISnapshotManager {
     std::function<bool(const std::string&)> uevent_regen_callback_;
     std::unique_ptr<SnapuserdClient> snapuserd_client_;
     std::unique_ptr<LpMetadata> old_partition_metadata_;
+    std::optional<bool> is_snapshot_userspace_;
     std::optional<bool> is_snapshot_ublk_;
 };
 
